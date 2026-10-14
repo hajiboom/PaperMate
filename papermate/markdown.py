@@ -65,12 +65,11 @@ def _render_page(page_text: str, title: str = "") -> list[str]:
         if title_key and stripped.replace(" ", "") == title_key:
             continue
 
-        marker = headings.classify_line(stripped)
+        marker, inline = headings.classify_line(stripped)
         if marker == "abstract":
             flush()
             out.append("## 摘要")
             out.append("")
-            inline = headings.ABSTRACT_RE.match(stripped).group(1).strip()
             if inline:
                 buffer.append(inline)
             continue
@@ -78,7 +77,6 @@ def _render_page(page_text: str, title: str = "") -> list[str]:
             flush()
             out.append("## 关键词")
             out.append("")
-            inline = headings.KEYWORDS_RE.match(stripped).group(1).strip()
             if inline:
                 out.append(inline)
                 out.append("")
@@ -111,6 +109,13 @@ def _render_page(page_text: str, title: str = "") -> list[str]:
             out.append("")
             continue
 
+        # 极短的无标点行（图注、表格残片、页眉残留）独立成行，不并入正文段落
+        if len(stripped) <= 6 and not re.search(r"[，。；：？！,;:?.]", stripped):
+            flush()
+            out.append(stripped)
+            out.append("")
+            continue
+
         # 下一非空行带段首缩进 → 当前段落结束
         next_line = lines[idx + 1] if idx + 1 < len(lines) else ""
         if buffer and _is_indented(next_line):
@@ -126,7 +131,7 @@ def _is_indented(line: str) -> bool:
     """判断一行是否带段首缩进（两个以上空格或全角空格开头）。"""
     if not line.strip():
         return False
-    return line.startswith("\u3000") or line.startswith("  ")
+    return line.startswith(("\u3000", "  "))
 
 
 def _merge_lines(lines: list[str]) -> str:

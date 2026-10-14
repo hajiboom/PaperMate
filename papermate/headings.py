@@ -65,20 +65,23 @@ def _looks_like_title(text: str) -> bool:
     if text.count("，") > 1 or text.count(",") > 1:
         return False
     # 纯数字/英文编号行
-    if re.fullmatch(r"[\d\W]+", text):
-        return False
-    return True
+    return not re.fullmatch(r"[\d\W]+", text)
 
 
-def classify_line(line: str) -> str:
-    """识别结构性标记行，返回 'abstract' | 'keywords' | 'references' | ''。"""
+def classify_line(line: str) -> tuple[str, str]:
+    """识别结构性标记行。
+
+    返回 ("abstract"|"keywords"|"references", 去掉标记后的内联内容)，无命中时 ("", "")。
+    """
     stripped = line.strip()
     if not stripped or len(stripped) > 80:
-        return ""
-    if ABSTRACT_RE.match(stripped):
-        return "abstract"
-    if KEYWORDS_RE.match(stripped):
-        return "keywords"
+        return "", ""
+    match = ABSTRACT_RE.match(stripped)
+    if match:
+        return "abstract", match.group(1).strip()
+    match = KEYWORDS_RE.match(stripped)
+    if match:
+        return "keywords", match.group(1).strip()
     if REFERENCE_RE.match(stripped):
-        return "references"
-    return ""
+        return "references", ""
+    return "", ""

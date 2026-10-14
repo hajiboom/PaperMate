@@ -26,7 +26,16 @@ class Hit:
     snippet: str
 
     def format(self) -> str:
-        return f"    文件：{self.file}\n    片段：……{self.snippet}……"
+        snippet = self.snippet.strip("…")
+        return f"    文件：{self.file}\n    片段：……{snippet}……"
+
+
+def _read_lines(file_path: Path) -> list[str] | None:
+    """读取文件行；读不出（编码/权限问题）时返回 None。"""
+    try:
+        return file_path.read_text(encoding="utf-8").splitlines()
+    except (OSError, UnicodeDecodeError):
+        return None
 
 
 def search(library_papers_dir: Path, keyword: str) -> list[Hit]:
@@ -45,9 +54,8 @@ def search(library_papers_dir: Path, keyword: str) -> list[Hit]:
             file_path = paper_dir / file_name
             if not file_path.is_file():
                 continue
-            try:
-                lines = file_path.read_text(encoding="utf-8").splitlines()
-            except Exception:
+            lines = _read_lines(file_path)
+            if lines is None:
                 continue
             for line_no, line in enumerate(lines, 1):
                 if needle in line.lower():
@@ -65,8 +73,7 @@ def search(library_papers_dir: Path, keyword: str) -> list[Hit]:
 def _snippet(line: str, needle: str) -> str:
     lower = line.lower()
     index = lower.find(needle)
-    if index < 0:
-        index = 0
+    index = max(index, 0)
     start = max(0, index - _SNIPPET_WIDTH)
     end = min(len(line), index + len(needle) + _SNIPPET_WIDTH)
     snippet = line[start:end].strip()

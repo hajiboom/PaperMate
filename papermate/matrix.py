@@ -38,27 +38,21 @@ def build_matrix(library: Library) -> tuple[str, int]:
 
         title = meta.get("title", "") or paper_dir.name
         year = meta.get("year", "") or NOT_PROVIDED
-
-        def brief_cell(name: str) -> str:
-            value = brief_sections.get(name, "")
-            return compress_for_table(value) if value else NOT_PROVIDED
-
-        limitation = critique_sections.get("主要风险", "")
-        limitation = limitation or critique_sections.get("风险与问题", "")
+        limitation = critique_sections.get("主要风险", "") or critique_sections.get(
+            "风险与问题", ""
+        )
         reference = critique_sections.get("使用建议", "")
-        if not reference:
-            reference = critique_sections.get("使用建议", "")
 
         rows.append(
             "| {title} | {year} | {question} | {theory} | {method} | {data} "
             "| {conclusion} | {limitation} | {reference} |".format(
                 title=compress_for_table(title),
                 year=year or NOT_PROVIDED,
-                question=brief_cell("研究问题"),
-                theory=brief_cell("理论视角"),
-                method=brief_cell("研究方法"),
-                data=brief_cell("数据来源"),
-                conclusion=brief_cell("核心结论"),
+                question=_brief_cell(brief_sections, "研究问题"),
+                theory=_brief_cell(brief_sections, "理论视角"),
+                method=_brief_cell(brief_sections, "研究方法"),
+                data=_brief_cell(brief_sections, "数据来源"),
+                conclusion=_brief_cell(brief_sections, "核心结论"),
                 limitation=compress_for_table(limitation) if limitation else NOT_PROVIDED,
                 reference=compress_for_table(reference) if reference else NOT_PROVIDED,
             )
@@ -70,3 +64,8 @@ def build_matrix(library: Library) -> tuple[str, int]:
 
 def _read(path: Path) -> str:
     return path.read_text(encoding="utf-8") if path.is_file() else ""
+
+
+def _brief_cell(sections: dict[str, str], name: str) -> str:
+    value = sections.get(name, "")
+    return compress_for_table(value) if value else NOT_PROVIDED

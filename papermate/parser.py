@@ -52,11 +52,16 @@ def parse_pdf(pdf_path: str | Path) -> dict:
             raise PdfParseError("PDF 没有任何页面，无法解析。")
 
         metadata = doc.metadata or {}
-        pages: list[tuple[int, str]] = []
-        for page_num, page in enumerate(doc, 1):
-            raw = page.get_text("text")
-            cleaned = clean_page_text(raw)
-            pages.append((page_num, cleaned))
+        raw_pages: list[str] = []
+        raw_uncleaned: list[str] = []
+        for page_num in range(doc.page_count):
+            page = doc.load_page(page_num)
+            text = page.get_text("text")
+            raw = text if isinstance(text, str) else ""
+            raw_uncleaned.append(raw)
+            raw_pages.append(clean_page_text(raw))
+
+        pages = _remove_recurring_lines(raw_pages)
 
         # 判断是否解析到了任何文字（扫描版 PDF 会得到空文本）
         if not any(text.strip() for _, text in pages):
@@ -69,7 +74,7 @@ def parse_pdf(pdf_path: str | Path) -> dict:
             metadata.get("title", "")
         )
         year_hint = _extract_year_hint(
-            [text for _, text in pages], metadata.get("creationDate", "") or ""
+            raw_uncleaned, metadata.get("creationDate", "") or ""
         )
 
         return {
@@ -87,13 +92,50 @@ def parse_pdf(pdf_path: str | Path) -> dict:
         doc.close()
 
 
+def _remove_recurring_lines(raw_pages: list[str]) -> list[tuple[int, str]]:
+    """删除在多页上重复出现的行（页眉/页脚/栏目名）。
+
+    相同文本行出现在 3 页及以上时视为页眉页脚；同页重复出现同样删除。
+    """
+    page_counts: dict[str, int] = {}
+    for text in raw_pages:
+        seen: set[str] = set()
+        for line in text.splitlines():
+            stripped = line.strip()
+            if (
+                2 <= len(stripped) <= 40
+                and not re.fullmatch(r"[\d\s]+", stripped)
+                and not stripped.endswith("。")
+                and stripped not in seen
+            ):
+                seen.add(stripped)
+        for line in seen:
+            page_counts[line] = page_counts.get(line, 0) + 1
+
+    pages: list[tuple[int, str]] = []
+    for page_num, text in enumerate(raw_pages, 1):
+        kept: list[str] = []
+        on_this_page: set[str] = set()
+        for line in text.splitlines():
+            stripped = line.strip()
+            if stripped in on_this_page and page_counts.get(stripped, 0) >= 3:
+                continue
+            on_this_page.add(stripped)
+            kept.append(line)
+        pages.append((page_num, "\n".join(kept).strip()))
+    return pages
+
+
 def _extract_year_hint(page_texts: list[str], creation_date: str) -> str:
-    """从前两页文本中推断发表年份（多个候选时取出现最多的）。"""
-    first_pages = "\n".join(page_texts[:2])
+    """推断发表年份：优先匹配「XXXX年第N期」期刊卷期模式，其次取出现最多的年份。"""
+    head_pages = "\n".join(page_texts[:2])
+    issue_match = re.search(r"(19|20)\d{2}\s*年\s*第\s*\d{1,3}\s*期", head_pages)
+    if issue_match:
+        return issue_match.group(0)[:4]
     this_year = date.today().year
     candidates = [
         y
-        for y in re.findall(r"(?:19|20)\d{2}", first_pages)
+        for y in re.findall(r"(?:19|20)\d{2}", head_pages)
         if 1990 <= int(y) <= this_year
     ]
     if candidates:
@@ -102,12 +144,14 @@ def _extract_year_hint(page_texts: list[str], creation_date: str) -> str:
     return match.group(1) if match else ""
 
 
-def _extract_title_from_layout(doc: "fitz.Document") -> str:
+def _extract_title_from_layout(doc: fitz.Document) -> str:
     """从第 1 页版面提取标题：取字号最大、以中文为主的那一行文本。"""
     try:
         page = doc[0]
+        layout = page.get_text("dict")
+        blocks = layout.get("blocks", []) if isinstance(layout, dict) else []
         spans: list[tuple[float, str]] = []
-        for block in page.get_text("dict").get("blocks", []):
+        for block in blocks:
             for line in block.get("lines", []):
                 line_text = ""
                 line_size = 0.0
@@ -131,7 +175,13 @@ def _extract_title_from_layout(doc: "fitz.Document") -> str:
         candidates = [text for size, text in spans if size >= top - 0.5]
         candidates = candidates[:2]
         return _clean_title("".join(candidates))
-    except Exception:
+    except (
+        RuntimeError,
+        TypeError,
+        ValueError,
+        KeyError,
+        IndexError,
+    ):  # 版面信息异常时静默降级，标题另有文本兜底
         return ""
 
 

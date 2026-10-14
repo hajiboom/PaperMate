@@ -18,7 +18,7 @@ from . import parser as pdf_parser
 from . import search as search_mod
 from .cleaner import normalize_spaces
 from .index import append_entry
-from .library import Library, PAPER_FILES, default_library_root, write_template_file
+from .library import PAPER_FILES, Library, default_library_root, write_template_file
 from .markdown import build_text_md
 from .meta import load_meta, save_meta
 
@@ -238,7 +238,7 @@ def show(paper_slug: str, library_dir: Path | None, as_json: bool) -> None:
 @_dir_option
 def matrix(library_dir: Path | None) -> None:
     """聚合多篇论文笔记，生成文献矩阵 matrix.md。"""
-    from .matrix import build_matrix, NOT_PROVIDED
+    from .matrix import NOT_PROVIDED, build_matrix
 
     library = _resolve_library(library_dir)
     if not library.papers_dir.exists():

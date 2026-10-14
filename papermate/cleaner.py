@@ -36,12 +36,29 @@ NOISE_LINE_RE = re.compile(
 # 页面上大量重复装饰字符（纯符号行）
 DECORATION_RE = re.compile(r"^[\s　·．.。*#%-—―─_=]{4,}$")
 
+# 期刊页眉/页脚里的「刊名 + 年份 + 期号」组合，作为子串删除（可能粘连正文）
+JOURNAL_ISSUE_SUBS = (
+    re.compile(r"《[^》]{1,25}》\s*20\d{2}\s*年\s*第\s*\d{1,3}\s*期(?:《[^》]{1,25}》)?"),
+    re.compile(r"20\d{2}\s*年\s*第\s*\d{1,3}\s*期\s*《[^》]{1,25}》"),
+    re.compile(r"DOI\s*[:：]\s*\S+", re.IGNORECASE),
+)
+
+# 独立的期刊期号行
+ISSUE_LINE_RE = re.compile(r"^20\d{2}\s*年\s*第\s*\d{1,3}\s*期\s*$")
+
+# 破折号开头的作者/标题页脚模式
+DASH_PREFIX_RE = re.compile(r"^—{1,2}")
+# 行首破折号前的短作者行（下一行以 —— 开头时一并删除）
+SHORT_NAME_RE = re.compile(r"^[\u4e00-\u9fff]{1,4}$")
+# 孤立符号行
+LONE_SYMBOL_RE = re.compile(r"^[\s□○●◎◆◇▪◦○\[\]()（）·]+$")
+
 
 def clean_page_text(text: str) -> str:
     """清洗单页文本，返回清洗后的多行文本（保留换行结构）。"""
     lines = text.splitlines()
     kept: list[str] = []
-    for line in lines:
+    for i, line in enumerate(lines):
         stripped = line.strip()
         if not stripped:
             # 保留空行作为段落分隔候选
@@ -49,11 +66,32 @@ def clean_page_text(text: str) -> str:
             continue
         if PAGE_NUMBER_RE.match(stripped):
             continue
+        if ISSUE_LINE_RE.match(stripped):
+            continue
+        if LONE_SYMBOL_RE.match(stripped):
+            continue
+        if DASH_PREFIX_RE.match(stripped):
+            continue
+        if (
+            SHORT_NAME_RE.match(stripped)
+            and i + 1 < len(lines)
+            and DASH_PREFIX_RE.match(lines[i + 1].strip())
+        ):
+            continue
+
+        # 期刊页眉（刊名+期号）、DOI 作为子串删除，保留粘连的后文
+        for pattern in JOURNAL_ISSUE_SUBS:
+            stripped = pattern.sub("", stripped)
+        # 保留行首缩进（markdown 渲染依赖缩进判断分段）
+        indent = line[: len(line) - len(line.lstrip())]
+        cleaned = indent + stripped.lstrip()
+        if not cleaned.strip():
+            continue
         if NOISE_LINE_RE.match(stripped):
             continue
         if DECORATION_RE.match(stripped):
             continue
-        kept.append(line.rstrip())
+        kept.append(stripped)
 
     result = "\n".join(kept)
     result = re.sub(r"\n{3,}", "\n\n", result)
