@@ -1,0 +1,8 @@
+.docs/
+tmp/
+.agent/
+.venv/
+__pycache__/
+*.egg-info/
+dist/
+research-library/
