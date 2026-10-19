@@ -95,19 +95,15 @@ def parse_pdf(pdf_path: str | Path) -> dict:
 def _remove_recurring_lines(raw_pages: list[str]) -> list[tuple[int, str]]:
     """删除在多页上重复出现的行（页眉/页脚/栏目名）。
 
-    相同文本行出现在 3 页及以上时视为页眉页脚；同页重复出现同样删除。
+    相同文本行出现在 3 页及以上时视为页眉页脚，在各页整行删除；
+    同页重复出现的候选行同样只保留第一次。
     """
     page_counts: dict[str, int] = {}
     for text in raw_pages:
         seen: set[str] = set()
         for line in text.splitlines():
             stripped = line.strip()
-            if (
-                2 <= len(stripped) <= 40
-                and not re.fullmatch(r"[\d\s]+", stripped)
-                and not stripped.endswith("。")
-                and stripped not in seen
-            ):
+            if _is_header_candidate(stripped):
                 seen.add(stripped)
         for line in seen:
             page_counts[line] = page_counts.get(line, 0) + 1
@@ -118,12 +114,26 @@ def _remove_recurring_lines(raw_pages: list[str]) -> list[tuple[int, str]]:
         on_this_page: set[str] = set()
         for line in text.splitlines():
             stripped = line.strip()
-            if stripped in on_this_page and page_counts.get(stripped, 0) >= 3:
+            if page_counts.get(stripped, 0) >= 3:
+                # 出现在 3 页及以上：页眉/页脚/栏目名，整行删除
+                continue
+            if _is_header_candidate(stripped) and stripped in on_this_page:
+                # 同页重复的候选行只保留第一次
                 continue
             on_this_page.add(stripped)
             kept.append(line)
         pages.append((page_num, "\n".join(kept).strip()))
     return pages
+
+
+def _is_header_candidate(stripped: str) -> bool:
+    """判断一行是否可能是页眉页脚（短行、非纯数字、非完整句子）。"""
+    return (
+        bool(stripped)
+        and 2 <= len(stripped) <= 40
+        and not re.fullmatch(r"[\d\s]+", stripped)
+        and not stripped.endswith("。")
+    )
 
 
 def _extract_year_hint(page_texts: list[str], creation_date: str) -> str:

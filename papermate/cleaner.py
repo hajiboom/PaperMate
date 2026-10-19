@@ -53,17 +53,52 @@ SHORT_NAME_RE = re.compile(r"^[\u4e00-\u9fff]{1,4}$")
 # 孤立符号行
 LONE_SYMBOL_RE = re.compile(r"^[\s□○●◎◆◇▪◦○\[\]()（）·]+$")
 
+# 字体映射缺失（知网 CID 字体）产生的乱码字符：正常中文论文不会出现的文字系统。
+# 刻意不含希腊字母（α、β 等在经管类论文正文合法出现）。
+MOJIBAKE_RE = re.compile(
+    r"["
+    r"\u0400-\u04FF"  # 西里尔
+    r"|\u0590-\u05FF"  # 希伯来
+    r"|\u0600-\u06FF"  # 阿拉伯
+    r"|\u0700-\u074F"  # 叙利亚
+    r"|\u0B00-\u0B7F"  # 奥里亚
+    r"|\u0C80-\u0CFF"  # 卡纳达
+    r"|\u0E00-\u0E7F"  # 泰文
+    r"|\u10A0-\u10FF"  # 格鲁吉亚
+    r"|\u1200-\u137F"  # 埃塞俄比亚
+    r"|\u3300-\u33FF"  # CJK 兼容方块（日文单位符号，知网乱码高发区）
+    r"|\uE000-\uF8FF"  # 私用区
+    r"]"
+)
+
+# 乱码折叠后的占位注释
+MOJIBAKE_COMMENT = "<!-- 无法识别的文字（PDF 字体映射缺失，{} 行，可能为图表），已省略 -->"
+
 
 def clean_page_text(text: str) -> str:
     """清洗单页文本，返回清洗后的多行文本（保留换行结构）。"""
     lines = text.splitlines()
     kept: list[str] = []
+    garbled_run = 0  # 连续乱码行计数，用于折叠成一条注释
+
+    def flush_garbled() -> None:
+        nonlocal garbled_run
+        if garbled_run:
+            kept.append(MOJIBAKE_COMMENT.format(garbled_run))
+            garbled_run = 0
+
     for i, line in enumerate(lines):
         stripped = line.strip()
         if not stripped:
             # 保留空行作为段落分隔候选
+            flush_garbled()
             kept.append("")
             continue
+        if MOJIBAKE_RE.search(stripped):
+            # 字体映射缺失的乱码行：内容不可信，折叠省略
+            garbled_run += 1
+            continue
+        flush_garbled()
         if PAGE_NUMBER_RE.match(stripped):
             continue
         if ISSUE_LINE_RE.match(stripped):
@@ -91,8 +126,9 @@ def clean_page_text(text: str) -> str:
             continue
         if DECORATION_RE.match(stripped):
             continue
-        kept.append(stripped)
+        kept.append(cleaned)
 
+    flush_garbled()
     result = "\n".join(kept)
     result = re.sub(r"\n{3,}", "\n\n", result)
     return result.strip()

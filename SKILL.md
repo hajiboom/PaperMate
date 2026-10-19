@@ -21,7 +21,10 @@ description: 社科论文（尤其中文知网论文）共读工作流。当用�
 
 **用户给 PDF 路径时：**
 
-1. 运行 `papermate parse <pdf路径>`（命令不存在则提示先安装本仓库：`pip install -e .`；若用户只想讨论，可直接让其粘贴摘要/正文片段，并说明"当前仅基于摘要/片段，不能代替全文判断"）。
+1. 运行 `papermate parse <pdf路径>`。命令不存在时依次尝试降级：
+   a. 当前目录有 `.venv/bin/papermate` 则直接用它；
+   b. 仍不可用则提示用户按 README.md 的安装说明补齐环境（本仓库 `pyproject.toml` 尚未提供 `[project]` 打包配置，`pip install -e .` 不可用，需 `uv venv .venv && uv pip install click pymupdf` 后手动建立入口）。
+   若用户只想讨论，可直接让其粘贴摘要/正文片段，并说明"当前仅基于摘要/片段，不能代替全文判断"。
 2. 找到生成的论文文件夹，读取 `text.md`、`meta.md`、`state.md`、`notes.md`。
 3. 按"30 秒粗读"开场（见下），然后**停下**问用户想深入哪部分。
 

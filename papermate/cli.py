@@ -17,7 +17,7 @@ import click
 from . import parser as pdf_parser
 from . import search as search_mod
 from .cleaner import normalize_spaces
-from .index import append_entry
+from .index import append_entry, refresh_entries
 from .library import PAPER_FILES, Library, default_library_root, write_template_file
 from .markdown import build_text_md
 from .meta import load_meta, save_meta
@@ -150,6 +150,16 @@ def _guess_title_from_text(pages: list[tuple[int, str]]) -> str:
     return ""
 
 
+def _sync_index(library: Library) -> bool:
+    """用各论文 meta.md 的最新受控字段回刷 INDEX.md。
+
+    parse 登记时阅读建议/用户判断为空，共读 agent 更新 meta 后，
+    任何 list / matrix 调用都会把 INDEX.md 补齐。返回是否有改动。
+    """
+    metas = {d.name: load_meta(d) for d in library.paper_dirs()}
+    return refresh_entries(library.index_path, metas)
+
+
 def _extract_abstract_keywords(text_md: str) -> tuple[str, str]:
     """从生成的 text.md 中提取摘要正文与关键词（用于 meta.md）。"""
     abstract = ""
@@ -177,6 +187,8 @@ def _extract_abstract_keywords(text_md: str) -> tuple[str, str]:
 def list_papers(library_dir: Path | None, as_json: bool) -> None:
     """列出本地论文。"""
     library = _resolve_library(library_dir)
+    if _sync_index(library) and not as_json:
+        click.echo("INDEX.md 已根据各论文 meta.md 更新。")
     papers = []
     for paper_dir in library.paper_dirs():
         meta = load_meta(paper_dir)
@@ -250,6 +262,8 @@ def matrix(library_dir: Path | None) -> None:
     content, count = build_matrix(library)
     matrix_path = library.matrix_dir / "matrix.md"
     matrix_path.write_text(content, encoding="utf-8")
+    if _sync_index(library):
+        click.echo("INDEX.md 已根据各论文 meta.md 更新。")
     click.echo(f"已生成 {matrix_path}（{count} 篇论文）")
     rows_missing = content.count(NOT_PROVIDED)
     if rows_missing:

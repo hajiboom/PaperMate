@@ -1,4 +1,4 @@
-# PaperMate / 知微
+# PaperMate
 
 [English](README.md) | [简体中文](README.zh-CN.md)
 
