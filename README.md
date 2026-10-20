@@ -1,101 +1,101 @@
 # PaperMate
 
-[English](README.md) | [简体中文](README.zh-CN.md)
+[简体中文](README.zh-CN.md) | English
 
-A local co-reading workflow for **Chinese social-science papers** (CNKI and similar sources):
+A reading toolkit for Chinese social-science papers (CNKI and similar), in two layers:
 
-> PaperMate = a universal AI-agent co-reading Skill (the brain) + a `papermate` CLI (the hands)
+- **Skill**: reading rhythm, evaluation criteria, notes and talk structure. Owns judgment.
+- **CLI**: `papermate read` turns a PDF into page-anchored `text.md` / `pages.json`. Owns fidelity.
 
-- **Skill**: loaded into any agent-capable coding assistant (OpenCode / Codex / Claude Code, etc.), it reads papers *with* the user — explaining concepts, scrutinizing methods, critiquing conclusions, and producing reading cards, quality reports, seminar outlines, literature matrices, and weekly reviews, all saved as local Markdown.
-- **CLI**: `papermate` only does file processing and local bookkeeping — parsing CNKI PDFs (PyMuPDF), cleaning text, creating per-paper folders, maintaining `INDEX.md`, aggregating the literature matrix, and keyword search over local notes.
-- **The CLI never calls a model and never makes academic judgments.** All thinking is done by the model running in the current agent session.
-- **All data stays local.** No uploads of PDFs or notes, no cloud sync.
+The CLI calls no model and makes no academic judgments; the agent in the current session does. All data stays local.
 
-## Installation
+## Why "CLI + Skill" instead of a bare skill or a plugin
+
+- **A bare skill does not work on dsh**: its built-in `read` accepts UTF-8 text only, so PDF needs a plugin.
+- **Plugins are not a portable layer**: dsh plugins are Cordis/Node, OpenCode has a different API. Only Markdown skills and a local CLI cross harnesses.
+- **v0.1's mistake was not "having a CLI"** — it was the lossy cleaning step inside it. `cleaner.py` collapsed table 1 into "4 fragments, folded", while the model still cited Page 4 with confidence.
+
+v0.2 inverts the contract: **every block is either parsed or explicitly marked. Nothing is dropped silently.**
+
+- Tables → Markdown tables (merged cells are filled down)
+- Figures → caption plus chart labels, marked "order unreliable, verify against the PDF"
+- Footnotes → cut from the first marker at the bottom of the page, continuation lines included
+- Every page keeps a `<!-- Page N -->` anchor
+
+## Why no `engines/` abstraction
+
+We measured 14 papers / 144 pages first (`bench/FINDINGS.md`):
+
+| Metric | Result |
+|---|---|
+| Papers with images | 0 / 14 |
+| Scanned pages | 0 / 14 |
+| Papers with tables | 3 / 14 |
+| Characters per page | 1,553 |
+
+A single PyMuPDF path covers the corpus. The real failures are line ordering, column layout, paragraph reconstruction and footnote splitting — not the extraction engine. So there is one function-level seam:
+
+```python
+def read_pages(path, pages=None) -> Document: ...
+```
+
+If scanned PDFs show up later, add `read_pages_mineru()` with the same return type. No engine registry.
+
+## Install
 
 ```bash
-# Python 3.10+
 git clone https://github.com/hajiboom/PaperMate.git
 cd PaperMate
-pip install -e .
-
-# or with uv
-uv pip install -e .
+uv venv .venv && uv pip install -e . -p .venv   # or pip install -e .
+./install.sh                                     # skill → ~/.dsh/skills and ~/.agents/skills
 ```
 
-This installs the `papermate` command (equivalent to `python -m papermate`).
-
-## Quick start
+## Usage
 
 ```bash
-# 1. Initialize the workspace (creates research-library/ in the current directory)
-papermate init
+# 1. Parse a paper
+papermate read paper.pdf --out research-library/papers/2026-10-20__short-title
 
-# 2. Parse a CNKI paper
-papermate parse ./papers/example.pdf
-# Options: --dir ./research-library  --force  --title "Title"  --tags "grassroots-governance,history"
-
-# 3. Then go to your agent (OpenCode, etc.) and say, e.g.:
-#    "Read this paper for me"
-#    "Is this paper worth reading?" / "Help me prep for the group meeting"  / "Build the literature matrix"
+# 2. Ask the agent
+#    "read this paper for me"
+#    "is it worth reading / is the method sound / can I cite it"
+#    "prepare a lab-meeting talk"
 ```
 
-## CLI commands
+`papermate read` produces `text.md` (for people) and `pages.json` (for programs). `--pages 1-3,5` reads a subset.
 
-| Command | Purpose |
-|---|---|
-| `papermate init` | Initialize the `research-library/` workspace (no-op if it exists) |
-| `papermate parse <pdf>` | Parse a PDF: create `papers/YYYY-MM-DD__short-title/`, generate `source.pdf` `text.md` `meta.md` `notes.md` `state.md`, and update `INDEX.md` |
-| `papermate list [--json]` | List local papers |
-| `papermate show <paper_slug> [--json]` | Show a paper's metadata and file checklist |
-| `papermate matrix` | Aggregate each paper's `meta.md` `brief.md` `critique.md` into `matrix/matrix.md` |
-| `papermate search <keyword>` | Plain string search across the 7 Markdown files of every paper |
-
-All commands accept `--dir <path>` (workspace), default `./research-library`.
-
-## Workspace layout
+## Workspace
 
 ```
 research-library/
-  INDEX.md                  # literature index
-  papers/
-    2026-10-12__grassroots-governance/
-      source.pdf            # original PDF
-      text.md               # parsed body text (with <!-- Page N --> anchors for citing positions)
-      meta.md               # YAML metadata (status / reading_recommendation / user_label)
-      brief.md              # reading card (generated by the Skill)
-      critique.md           # quality review (generated by the Skill)
-      slides.md             # seminar outline (generated by the Skill)
-      notes.md              # reading notes
-      state.md              # reading state
-  matrix/matrix.md          # literature matrix (CLI aggregation + Skill interpretation)
-  weekly/2026-W41.md        # weekly review (generated by the Skill)
+  papers/YYYY-MM-DD__short-title/
+    source.pdf
+    text.md        # CLI: page-anchored text, tables as Markdown
+    pages.json     # CLI: structured blocks
+    meta.md        # status / reading_recommendation / user_label
+    notes.md       # reading notes (append-only)
+    state.md       # where you stopped, open questions
+    brief.md       # optional paper card
+    critique.md    # optional
+    slides.md      # optional
+  matrix/matrix.md
+  weekly/YYYY-WXX.md
 ```
 
-The CLI only writes the 5 files produced by `parse`; `brief.md` `critique.md` `slides.md` and `weekly/` are produced by the co-reading Skill on request.
 
-## Agent Skill (co-reading workflow)
+## Known limits
 
-See **[SKILL.md](SKILL.md)** for the skill itself and **[AGENTS.md](AGENTS.md)** for wiring instructions.
+- **Scanned PDFs**: no OCR. The page is flagged as needing OCR instead of pretending to read it.
+- **Figures**: labels are separated, but there is no image understanding. Verify numbers against the PDF.
+- **Complex tables**: merged cells are filled for the first column only; borderless and cross-page tables can still fail. They are flagged, not guessed.
+- **Offline**: no model API calls, no uploads.
 
-- Load SKILL.md as a system prompt / skill file and any agent will follow the same co-reading workflow.
-- OpenCode: copy to `.opencode/skill/papermate/SKILL.md`.
-- Codex: merge into (or reference from) your project's `AGENTS.md`.
-- Claude Code: copy to `~/.claude/skills/papermate/SKILL.md`.
+## Benchmarks
 
-## Development
-
-```bash
-uv venv .venv && uv pip install -e . -p .venv        # deps: click, PyMuPDF
-python testdata/make_sample_pdf.py                   # regenerate testdata/sample.pdf
-```
-
-Static checks used during development: `ruff check papermate testdata` and `pyright` (0 errors / 0 warnings).
-
-## What this project deliberately does NOT do (v1)
-
-No chat UI, accounts, cloud sync, database, HTTP API, vector retrieval, or PDF viewer.
-The CLI never calls an LLM, never generates academic summaries, never judges paper quality, and never requires configuring a model API.
+- `bench/probe.py`: single-paper layout probe
+- `bench/run.py`: corpus structure scorecard
+- `bench/regress.py`: v0.2 regression (paragraphs, headings, tables, figures, notes, line order, header leaks)
+- `bench/FINDINGS.md`: results and decisions
 
 ## License
 

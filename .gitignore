@@ -3,6 +3,12 @@ tmp/
 .agent/
 .venv/
 __pycache__/
-*.egg-info/
-dist/
+.ruff_cache/
 research-library/
+bench/corpus/
+bench/*.json
+.dsh/skills/
+.opencode/skill/
+
+
+bench/corpus/

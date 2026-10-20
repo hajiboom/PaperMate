@@ -1,33 +1,44 @@
-# AGENTS.md —— PaperMate 共读 Skill 通用接入说明
+# AGENTS.md —— PaperMate 接入说明
 
-本项目的核心产出之一是一套**与工具无关**的社科论文共读 Skill（见 `SKILL.md`）。
-任何能按 Markdown 指令工作的编码 Agent（OpenCode、Codex、Claude Code 等）都可以使用。
+本项目有两个产物：
+
+- `skills/papermate/`：与工具无关的共读 skill（判断、流程、模板）
+- `papermate/`：按页读取 PDF 的 CLI（`papermate read`），不调用模型
+
+v0.1 的旧 CLI 已封存在 `v0.1-final` tag；v0.2 只保留按页读取，不做 `engines/` 抽象。
 
 ## 接入方式
 
 | 工具 | 做法 |
 |---|---|
-| OpenCode | `mkdir -p .opencode/skill/papermate && cp SKILL.md .opencode/skill/papermate/SKILL.md` |
-| Codex | 把 SKILL.md 全文并入项目的 `AGENTS.md`（或用 `@SKILL.md` 引用） |
-| Claude Code | `mkdir -p ~/.claude/skills/papermate && cp SKILL.md ~/.claude/skills/papermate/SKILL.md` |
-| 其他工具 / API | 把 SKILL.md 内容放入系统提示或项目级指令文件 |
+| dsh | `./install.sh` → `~/.dsh/skills/papermate/`，用 `/papermate` 触发 |
+| OpenCode | `./install.sh --project` → `.opencode/skill/papermate/` |
+| Codex | `./install.sh` → `~/.agents/skills/papermate/`，或把 SKILL.md 并入 AGENTS.md |
+| Claude Code | `cp -R skills/papermate ~/.claude/skills/papermate` |
+| 其他 / API | 把 `skills/papermate/SKILL.md` 放进系统提示或项目指令文件 |
 
-## Skill 与 CLI 的分工
+skill 靠目录扫描发现，`dsh plugin add` 不安装 skill。
 
-- **CLI（`papermate`）**：解析 PDF、清洗文本、建论文文件夹、维护 INDEX.md、聚合矩阵、本地搜索。
-  它**不含任何模型调用与学术判断**。
-- **Agent（加载 SKILL.md 后）**：共读、解释、批判、评估政策建议、生成 brief/critique/slides/weekly，
-  并把结论写回对应论文文件夹的 Markdown 文件（追加，不覆盖）。
+## 读取流程
+
+1. `papermate --version` 确认 CLI 可用。
+2. `papermate read <pdf> --out research-library/papers/YYYY-MM-DD__短标题`。
+3. 读生成的 `text.md`：带 `<!-- Page N -->`，表格是 Markdown，图内文字单列。
+4. 标了「扫描页 / 需回原 PDF 核对 / 顺序不可靠」的地方，回原文件确认，不要从残片推断。
+
+CLI 不可用时，才退回会话里的按页 PDF 工具或用户粘贴的文本。
 
 ## Agent 使用本项目时的硬性规则
 
-1. 检测到论文类请求时，先检查 `papermate` 命令是否可用；可用则优先 `papermate parse <pdf>`，
-   再读取生成的 `text.md`。不可用时提示安装，或直接讨论用户粘贴的文本。
-2. 所有输出基于本地解析后的文本或用户提供的原文；信息不足时明确说"原文未提及"，
-   **不编造引用、数据、参考文献或作者观点**。
-3. 保存判断时追加到 `notes.md` / `state.md`，不覆盖用户内容；
-   阅读建议与用户判断的受控取值写回 `meta.md` 时保持 YAML 格式合法。
-4. 需要文献矩阵时先运行 `papermate matrix`，再基于 matrix.md 做归纳解读。
-5. 数据不出本地：不要把论文内容或笔记上传到任何第三方服务。
+1. **CLI 优先**：用 `papermate read` 生成的 `text.md`，不要临时手写脚本把 PDF 转文本。有损转换会静默丢掉表格、图注和脚注。
+2. 判断基于原文，给「章节标题 + 原文短句」；页码以 `<!-- Page N -->` 为准，不确定就标「页码待核」；信息不足写「原文未提及」。
+3. 表格和图是证据：表格按行列读，图内文字只作线索；读不清就说「需回原 PDF 核对」。
+4. 保存判断时**追加**到 `notes.md` / `state.md`，不覆盖用户内容；`meta.md` 的受控字段保持 YAML 合法。
+5. 数据不出本地：不上传论文或笔记到任何第三方服务。
 
-详细工作流、模板与输出风格见 `SKILL.md`。
+## 维护
+
+- 读取逻辑在 `papermate/`：`read.py`（编排）、`layout.py`（行/栏/段/脚注）、`tables.py`、`figures.py`、`render.py`。
+- 只保留一个函数级接缝 `read_pages()`；不要引入引擎注册表，除非基准测试证明单一 PyMuPDF 不够。
+- 改版面逻辑后跑 `bench/regress.py`，要求：行序倒置 0、页眉残留 0、短段不显著增加。
+- 改 skill 只改 `skills/papermate/`（正文 + `templates/`）。

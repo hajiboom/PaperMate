@@ -1,5 +1,24 @@
+[project]
+name = "papermate"
+version = "0.2.0"
+description = "按页、可核对的 PDF 读取（文科论文），配合 Agent Skill 使用"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+dependencies = ["pymupdf>=1.24"]
+
+[project.scripts]
+papermate = "papermate.cli:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["papermate"]
+
 [tool.pyright]
 venvPath = "."
 venv = ".venv"
-include = ["papermate", "testdata"]
+include = ["papermate", "bench"]
 typeCheckingMode = "basic"
