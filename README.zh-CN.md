@@ -56,18 +56,23 @@ uv venv .venv && uv pip install -e . -p .venv   # 或 pip install -e .
 # 1. 解析一篇论文
 papermate read paper.pdf --out research-library/papers/2026-10-20__短标题
 
+# 或者：把一批 PDF 放进 research-library/inbox/，一次扫完
+papermate scan
+
 # 2. 到 Agent 里说
-#    "帮我读一下这篇论文"
-#    "这篇值不值得读 / 水不水 / 能不能引用"
+#    "这批论文哪些值得读"
+#    "第 3 篇的方法再讲讲"
 #    "帮我准备组会 / 写讲稿"
 ```
 
 `papermate read` 生成 `text.md`（人读）与 `pages.json`（程序读）。可选 `--pages 1-3,5` 只读部分页面。
+`papermate scan` 是幂等的：同一个 PDF（按 sha256）只解析一次，重复扫描会跳过；新论文自动进 `INDEX.md`。
 
 ## 工作区
 
 ```
 research-library/
+  inbox/              # 待读 PDF 放这里，papermate scan 批量解析
   papers/YYYY-MM-DD__短标题/
     source.pdf
     text.md        # CLI：按页文本，表格为 Markdown

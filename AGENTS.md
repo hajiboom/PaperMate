@@ -22,9 +22,10 @@ skill 靠目录扫描发现，`dsh plugin add` 不安装 skill。
 ## 读取流程
 
 1. `papermate --version` 确认 CLI 可用。
-2. `papermate read <pdf> --out research-library/papers/YYYY-MM-DD__短标题`。
-3. 读生成的 `text.md`：带 `<!-- Page N -->`，表格是 Markdown，图内文字单列。
-4. 标了「扫描页 / 需回原 PDF 核对 / 顺序不可靠」的地方，回原文件确认，不要从残片推断。
+2. 单篇：`papermate read <pdf> --out research-library/papers/YYYY-MM-DD__短标题`。
+3. 一批：把 PDF 放进 `research-library/inbox/`，运行 `papermate scan`（幂等，重复的 PDF 会跳过）。
+4. 读生成的 `text.md`：带 `<!-- Page N -->`，表格是 Markdown，图内文字单列。
+5. 标了「扫描页 / 需回原 PDF 核对 / 顺序不可靠」的地方，回原文件确认，不要从残片推断。
 
 CLI 不可用时，才退回会话里的按页 PDF 工具或用户粘贴的文本。
 

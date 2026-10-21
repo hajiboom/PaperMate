@@ -56,18 +56,23 @@ uv venv .venv && uv pip install -e . -p .venv   # or pip install -e .
 # 1. Parse a paper
 papermate read paper.pdf --out research-library/papers/2026-10-20__short-title
 
+# Or: drop a batch into research-library/inbox/ and scan once
+papermate scan
+
 # 2. Ask the agent
-#    "read this paper for me"
-#    "is it worth reading / is the method sound / can I cite it"
+#    "which of these are worth reading"
+#    "explain paper 3's method"
 #    "prepare a lab-meeting talk"
 ```
 
 `papermate read` produces `text.md` (for people) and `pages.json` (for programs). `--pages 1-3,5` reads a subset.
+`papermate scan` is idempotent: each PDF (by sha256) is parsed once, repeats are skipped, new papers are appended to `INDEX.md`.
 
 ## Workspace
 
 ```
 research-library/
+  inbox/              # drop PDFs here; `papermate scan` parses the batch
   papers/YYYY-MM-DD__short-title/
     source.pdf
     text.md        # CLI: page-anchored text, tables as Markdown

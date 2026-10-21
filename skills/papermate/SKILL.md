@@ -21,10 +21,24 @@ whenToUse: 用户给出论文 PDF（一个或多个）或粘贴论文文本，�
 ## 开始前
 
 1. 运行 `papermate --version` 确认 CLI 可用。
-2. 可用：`papermate read <pdf路径> --out research-library/papers/YYYY-MM-DD__短标题`，然后读生成的 `text.md`。
+2. 可用：单篇用 `papermate read <pdf路径> --out research-library/papers/YYYY-MM-DD__短标题`；一批用 `papermate scan`，然后读生成的 `text.md`。
 3. 不可用：退回会话里的按页 PDF 工具（`pdf_read` / `read_document` / `read_pdf`），或让用户粘贴文本，并说明「仅基于片段，不能代替全文判断」。
 
 `text.md` 是派生文件，不是原文本身。它带 `<!-- Page N -->` 页码锚点；表格是 Markdown；图会单独列出并标「图内文字顺序不可靠」。遇到标记或明显缺数据，回原 PDF 核对。
+
+## 批量阅读与上下文预算（你自己执行，不打扰用户）
+
+用户把一批 PDF 放进 `research-library/inbox/`，或一次给多个路径时：
+
+1. 先 `papermate scan`（默认扫描 `research-library/inbox/`，输出到 `research-library/papers/`，按 sha256 跳过重复文件）。
+2. 粗筛：每篇只读第 1–2 页、摘要/关键词、最后一页；读完立刻写一行卡片到 `INDEX.md`，再读下一篇。
+3. 同一时间只在上下文里保留 **1 篇全文**，其余用卡片。
+4. 每读完一篇，先追加 `notes.md` / `state.md`，再读下一篇。
+5. 横向比较读卡片和已读笔记，不重读全文；需要核对时再单独读某一页。
+6. 上下文接近上限时，主动说「建议新开会话，状态已写进 state.md」，不要硬撑。
+7. 不要向用户解释页码切片、token 预算这些词。
+
+用户视角只有三件事：把 PDF 放进 `inbox/`、提问或讨论、要 PPT。读多少、读哪些页由你判断。
 
 ## 工作区
 
@@ -32,6 +46,7 @@ whenToUse: 用户给出论文 PDF（一个或多个）或粘贴论文文本，�
 
 ```
 research-library/
+  inbox/              # 用户把待读 PDF 放这里
   INDEX.md
   papers/YYYY-MM-DD__短标题/
     source.pdf        # 原始 PDF

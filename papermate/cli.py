@@ -11,6 +11,7 @@ from pathlib import Path
 
 from .read import read_pages
 from .render import render_json, render_markdown
+from .scan import scan
 
 
 def cmd_read(args: argparse.Namespace) -> int:
@@ -35,6 +36,25 @@ def cmd_read(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_scan(args: argparse.Namespace) -> int:
+    inbox = args.inbox or (args.library / "inbox")
+    if not inbox.is_dir():
+        print(f"找不到 inbox：{inbox}（先建目录并放入 PDF）", file=sys.stderr)
+        return 1
+
+    result = scan(inbox, args.library, force=args.force)
+    for entry in result["added"]:
+        print(f"added   {entry['slug']}")
+    for name, error in result["errors"]:
+        print(f"error   {name}: {error}", file=sys.stderr)
+    print(
+        f"added={len(result['added'])} "
+        f"skipped={result['skipped']} errors={len(result['errors'])} "
+        f"library={result['library']}"
+    )
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="papermate",
@@ -48,6 +68,20 @@ def build_parser() -> argparse.ArgumentParser:
     read.add_argument("--pages", default=None, help='页码范围，如 "1-3,5"')
     read.add_argument("--out", default=None, help="输出目录（省略则打印到 stdout）")
     read.set_defaults(func=cmd_read)
+
+    scan = sub.add_parser("scan", help="批量解析 inbox 里的 PDF，更新 INDEX.md")
+    scan.add_argument(
+        "inbox",
+        nargs="?",
+        type=Path,
+        default=None,
+        help="PDF 目录（默认 <library>/inbox）",
+    )
+    scan.add_argument(
+        "--library", type=Path, default=Path("research-library"), help="工作区目录"
+    )
+    scan.add_argument("--force", action="store_true", help="重新解析已扫描过的 PDF")
+    scan.set_defaults(func=cmd_scan)
     return parser
 
 
