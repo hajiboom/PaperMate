@@ -17,6 +17,7 @@ whenToUse: 用户给出论文 PDF（一个或多个）或粘贴论文文本，�
 3. **表格和图是证据，不是排版。** 文本抽取通常不保留表格结构：关键表格要按行列读（必要时请用户渲染该页或 OCR），不能从正文转述里猜数字。工具报截断、扫描页或无文本层时，直接说「此处需回原 PDF 核对」，不要用残片推断。
 4. **追加，不覆盖。** 写回 `notes.md` / `state.md` 时只追加；`meta.md` 只改受控字段。用户已有的文字永远优先。
 5. **口吻克制。** 不写"这篇很垃圾"，改写"结论需要谨慎对待 / 样本代表性不足 / 政策建议偏原则性"。
+6. **引号里的文字必须能在原文找到。** 自己的概括不加引号；评价时区分「作者主张 / 我的推断 / 需人工确认」。
 
 ## 开始前
 
@@ -24,7 +25,14 @@ whenToUse: 用户给出论文 PDF（一个或多个）或粘贴论文文本，�
 2. 可用：单篇用 `papermate read <pdf路径> --out research-library/papers/YYYY-MM-DD__短标题`；一批用 `papermate scan`，然后读生成的 `text.md`。
 3. 不可用：退回会话里的按页 PDF 工具（`pdf_read` / `read_document` / `read_pdf`），或让用户粘贴文本，并说明「仅基于片段，不能代替全文判断」。
 
-`text.md` 是派生文件，不是原文本身。它带 `<!-- Page N -->` 页码锚点；表格是 Markdown；图会单独列出并标「图内文字顺序不可靠」。遇到标记或明显缺数据，回原 PDF 核对。
+`text.md` 是派生文件，不是原文本身。它带 `<!-- Page N -->` 页码锚点；表格是 Markdown；图会单独列出并标「图内文字顺序不可靠」。`pages.json` 的 `blocks` 不含脚注（脚注在 `footnotes`），字符数比 `text.md` 少是正常的。
+
+## 核对与降级
+
+1. 第一次核对：先用 `papermate read <pdf> --pages N --out <临时目录>`，或读 `pages.json` 的对应页。
+2. 用户明确说「原文不是这样」，或 CLI 输出与原文冲突时：先告诉用户「我做一次独立解析交叉核对」，再用 PyMuPDF 等直接读该页。
+3. 独立解析只作**第二来源**：不要写回 `text.md` / `pages.json`，不要当成新的规范；最终引用以原 PDF 为准。
+4. 报告差异：第几页、CLI 是什么、原文是什么、差在哪。确认是 CLI 的 bug，就记下可复现的页码和例子。
 
 ## 批量阅读与上下文预算（你自己执行，不打扰用户）
 
@@ -101,15 +109,22 @@ research-library/
 
 ## 交付物（用户要求时才生成）
 
-| 请求 | 生成 | 模板 |
-|---|---|---|
-| 值不值得读？水不水？方法可靠吗？能不能引用？ | `critique.md` | `templates/critique.md` |
-| 准备组会 / 汇报大纲 / 讲稿 | `slides.md` | `templates/slides.md` |
-| 做文献矩阵 / 横向比较 | `matrix/matrix.md` | `templates/matrix.md` |
-| 生成周报 | `weekly/YYYY-WXX.md` | `templates/weekly.md` |
-| 保存判断 / 记一下想法 | 追加 `notes.md`、`state.md`，可更新 `meta.md` | `templates/notes.md`、`templates/state.md` |
+用户只说需求，不要要求用户知道 `critique` / `matrix` / `slides` 这些内部文件名。
+你负责把需求映射到交付物；写完后可以顺带一句「已保存到 …」。
 
-- **矩阵**：读各篇 `brief.md` 与 `meta.md` 汇总，缺字段写「未提供」，不要猜。没有 `brief.md` 就先补卡片或直接标"未提供"。
+给下一步选项时也用需求描述，例如「要不要做一份质量评估 / 把这四篇横向比一下 / 直接写研究缺口」，
+不要列 `critique.md`、`matrix.md`。
+
+| 用户可能怎么说 | 生成 | 模板 |
+|---|---|---|
+| 这篇靠不靠谱？水不水？方法可靠吗？能不能引？值不值得读？ | `critique.md` | `templates/critique.md` |
+| 组会讲什么？汇报怎么做？帮我写讲稿 / 大纲 | `slides.md` | `templates/slides.md` |
+| 这几篇放一起比一比？有什么共识和分歧？帮我横向对比 | `matrix/matrix.md` | `templates/matrix.md` |
+| 写综述 / 开题文献综述 / 这几篇能引出什么题目 | `review.md` | `templates/review.md` |
+| 这周读了什么？给导师汇报一下进度 | `weekly/YYYY-WXX.md` | `templates/weekly.md` |
+| 记一下这个想法 / 保存这个判断 | 追加 `notes.md`、`state.md`，可更新 `meta.md` | `templates/notes.md`、`templates/state.md` |
+
+- **横向对比**（内部叫矩阵）：读各篇 `brief.md` 与 `meta.md` 汇总，缺字段写「未提供」，不要猜。没有 `brief.md` 就先补卡片或直接标"未提供"。
 - **周报**：读本周 `notes.md` 与 `matrix.md` 归纳，区分"论文之间的共识"与"分歧"。
 - **slides.md** 要覆盖：论文信息、一句话总结、研究背景、研究问题、理论框架、研究方法、主要结论、优点、问题与风险、对本研究的启发、讨论问题、导师可能追问的问题、逐页讲稿提示。
 - **critique.md** 要覆盖：阅读建议、判断理由、问题意识、理论适配性、方法严谨性、数据充分性、论证链条、政策建议可操作性、过度声明风险、主要风险、需人工确认的问题、使用建议。
