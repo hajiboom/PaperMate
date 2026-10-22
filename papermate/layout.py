@@ -19,7 +19,10 @@ NOTE_START = re.compile(
     r"^\s*(?:[①-⑳]|[（(]\d{1,2}[)）]|[［\[]\d{1,3}[］\]]|〔\d{1,3}〕)"
 )
 PAGE_NO = re.compile(r"^[·•\s]*\d{1,4}[·•\s]*$")
-ISSUE_RE = re.compile(r"(?:(?:19|20)\d{2}\s*年\s*第\s*\d+\s*期|总第\s*\d+\s*期|第\s*\d+\s*期)")
+ISSUE_RE = re.compile(
+    r"(?:(?:19|20)\d{2}\s*年\s*第\s*\d+\s*期|总第\s*\d+\s*期|第\s*\d+\s*期|(?:19|20)\d{2}\.\d{1,2})"
+)
+NOTE_HEADER = re.compile(r"^\s*(?:注释|注)\s*[:：]?\s*$")
 
 
 def normalize(text: str) -> str:
@@ -118,7 +121,7 @@ def merge_same_baseline(lines: list[Line], column_mid: float | None = None) -> l
     if not lines:
         return []
 
-    ordered = sorted(lines, key=lambda line: (line.y0, line.x0))
+    ordered = sorted(lines, key=lambda line: (line.y1, line.x0))
     groups: list[list[Line]] = []
     for line in ordered:
         if line.rotated:
@@ -131,7 +134,7 @@ def merge_same_baseline(lines: list[Line], column_mid: float | None = None) -> l
                 or (group[-1].center_x < column_mid) == (line.center_x < column_mid)
             )
             if (
-                abs(group[0].y0 - line.y0) <= 2.5
+                abs(group[0].y1 - line.y1) <= 3.0
                 and gap <= max(4.0, 0.8 * line.size)
                 and same_side
             ):
@@ -145,7 +148,11 @@ def merge_same_baseline(lines: list[Line], column_mid: float | None = None) -> l
         group.sort(key=lambda line: line.x0)
         text = ""
         for piece in group:
-            text = join_text(text, piece.text)
+            piece_text = piece.text
+            # 过大的破折号字形会重复一个 "—"
+            if text.endswith("—") and piece_text.startswith("—"):
+                piece_text = piece_text[1:]
+            text = join_text(text, piece_text)
         merged.append(
             Line(
                 text=normalize(text),
@@ -338,6 +345,18 @@ def group_paragraphs(run: list[Line], body: float) -> list[Block]:
         current = []
 
     for line in run:
+        if current:
+            previous = current[-1]
+            # 同一视觉行上的补字/重叠片段：直接并回，不新起段落
+            if (
+                abs(line.y0 - previous.y0) < 0.6 * max(line.size, previous.size)
+                and line.x0 < previous.x1 - 2
+            ):
+                if previous.text.endswith("—") and line.text.startswith("—"):
+                    line.text = line.text[1:]
+                current.append(line)
+                continue
+
         if _is_heading(line, body):
             flush()
             blocks.append(
@@ -380,9 +399,30 @@ def group_paragraphs(run: list[Line], body: float) -> list[Block]:
     return blocks
 
 
-def split_footnotes(lines: list[Line], body: float, height: float) -> tuple[list[Line], list[Block]]:
-    """从页面下方第一条脚注标记开始，后面全部算脚注（含续行）。"""
+def split_footnotes(
+    lines: list[Line], body: float, height: float, column_mid: float | None = None
+) -> tuple[list[Line], list[Block]]:
+    """切出脚注。
+
+    双栏页里脚注可能只占一栏，而另一栏正文还在往下走，所以不能简单按 y 切：
+    有「注释：」小标题时，只切该标题所在那一栏的下方；否则退回按 y 切。
+    """
     ordered = sorted(lines, key=lambda line: (line.y0, line.x0))
+
+    header = next((line for line in ordered if NOTE_HEADER.match(line.text)), None)
+    if header is not None and column_mid is not None:
+        on_right = header.center_x >= column_mid
+        note_ids = {id(header)}
+        note_lines: list[Line] = []
+        for line in ordered:
+            same_column = (line.center_x >= column_mid) == on_right
+            if same_column and line.y0 >= header.y0 - 1:
+                note_ids.add(id(line))
+                if line is not header:
+                    note_lines.append(line)
+        body_lines = [line for line in ordered if id(line) not in note_ids]
+        return body_lines, group_notes(_clean_notes(note_lines))
+
     start: int | None = None
     for index, line in enumerate(ordered):
         if line.y0 < 0.55 * height:
@@ -397,12 +437,15 @@ def split_footnotes(lines: list[Line], body: float, height: float) -> tuple[list
         return ordered, []
 
     body_lines = ordered[:start]
-    note_lines = [
+    return body_lines, group_notes(_clean_notes(ordered[start:]))
+
+
+def _clean_notes(lines: list[Line]) -> list[Line]:
+    return [
         line
-        for line in ordered[start:]
+        for line in lines
         if not PAGE_NO.match(line.text) and line.text.strip() not in {"·", "•"}
     ]
-    return body_lines, group_notes(note_lines)
 
 
 def group_notes(lines: list[Line]) -> list[Block]:

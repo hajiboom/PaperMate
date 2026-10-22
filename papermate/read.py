@@ -161,7 +161,9 @@ def read_pages(path: str | Path, pages: str | None = None) -> Document:
                 if id(line) not in consumed_ids and not line_inside(line, table_boxes)
             ]
 
-            body_lines, notes = split_footnotes(lines, document_body, height)
+            body_lines, notes = split_footnotes(
+                lines, document_body, height, column_mid if two_column else None
+            )
             runs = order_runs(body_lines, width, two_column)
 
             blocks: list[Block] = []
