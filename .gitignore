@@ -12,3 +12,5 @@ bench/*.json
 
 
 bench/corpus/
+*.egg-info/
+dist/
