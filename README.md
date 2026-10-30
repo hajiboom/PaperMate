@@ -102,6 +102,10 @@ research-library/
 - `bench/regress.py`: v0.2 regression (paragraphs, headings, tables, figures, notes, line order, header leaks)
 - `bench/FINDINGS.md`: results and decisions
 
+## Planning notes
+
+- [`docs/papermate-v0.3-ppt-research.md`](docs/papermate-v0.3-ppt-research.md): v0.3 PPT-generation research, proposed architecture and acceptance criteria
+
 ## License
 
 MIT

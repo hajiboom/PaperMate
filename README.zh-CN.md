@@ -101,6 +101,10 @@ research-library/
 - `bench/regress.py`：v0.2 回归（段落/标题/表/图/脚注/行序/页眉残留）
 - `bench/FINDINGS.md`：结论与决定
 
+## 规划记录
+
+- [`docs/papermate-v0.3-ppt-research.md`](docs/papermate-v0.3-ppt-research.md)：v0.3 PPT 生成调研、候选架构与验收标准
+
 ## 许可
 
 MIT
